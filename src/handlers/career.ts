@@ -17,27 +17,18 @@ export async function careerHandler(req: Request, res: Response) {
       messages: { role: string; content: string }[];
     };
 
-    if (!messages?.length) {
-      return res.status(400).json({ error: 'messages array is required' });
-    }
-
-    const resumeText = await getResumeText();
+    const lastMessage = messages[messages.length - 1]?.content ?? '';
+    const isParsingRequest = lastMessage.includes('Parse this resume text into JSON');
 
     const result = await invokeLlama({
-      system: `You are a career advisor who knows this candidate's background in detail.
-
-Candidate resume:
-${resumeText.slice(0, 2000)}
-
-Your role:
-- Help with interview prep, salary negotiation, and how to position experience
-- Be specific, direct, and practical — reference their actual experience when relevant
-- Keep responses concise and conversational
-- Plain text only, no markdown headers or bullet symbols
-- When suggesting talking points, make them concrete and tailored to this candidate`,
+      system: isParsingRequest
+        ? `You are a resume parser. Return ONLY valid JSON matching the schema provided. No explanation, no markdown, no preamble.`
+        : `You are a career advisor who knows this candidate's background.
+${await getResumeText().then(t => t.slice(0, 2000)).catch(() => '')}
+Be specific, direct, and practical. Plain text only.`,
       messages,
-      maxTokens: 1024,
-      temperature: 0.4,
+      maxTokens: isParsingRequest ? 2048 : 1024,
+      temperature: isParsingRequest ? 0.1 : 0.4,
     });
 
     return res.json({ content: result });
