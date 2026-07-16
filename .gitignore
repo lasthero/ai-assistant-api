@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+src/node_modules/
+
+# Build output
+src/dist/
+
+# Terraform
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars          # contains secrets — use terraform.tfvars.example instead
+*.tfplan
+.terraform.lock.hcl
+infra/modules/lambda/scraper.zip
+infra/modules/lambda/node_modules/
+
+# Env
+.env
+.env.local
+
+# OS
+.DS_Store
