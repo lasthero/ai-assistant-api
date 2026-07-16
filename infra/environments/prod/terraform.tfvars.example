@@ -1,0 +1,8 @@
+# Copy this to terraform.tfvars and fill in values
+# Never commit terraform.tfvars to git
+
+aws_region     = "us-east-1"
+project_name   = "chihho-ai-assistant"
+env            = "prod"
+s3_bucket_name = "chihho-dev-assets"  # your existing S3 bucket
+rapidapi_key   = "your-rapidapi-key-here"
