@@ -39,7 +39,8 @@ module "iam" {
 module "secrets" {
   source       = "../../modules/secrets"
   project_name = var.project_name
-  rapidapi_key = var.rapidapi_key
+  adzuna_app_id = var.adzuna_app_id
+  adzuna_app_key = var.adzuna_app_key
 }
 
 module "elasticache" {
@@ -61,7 +62,7 @@ module "ecs" {
   task_role_arn       = module.iam.ecs_task_role_arn
   redis_host          = module.elasticache.redis_host
   s3_bucket           = var.s3_bucket_name
-  rapidapi_secret_arn = module.secrets.rapidapi_secret_arn
+  adzuna_secret_arn = module.secrets.adzuna_secret_arn
 }
 
 module "api_gateway" {
@@ -78,7 +79,7 @@ module "lambda" {
   vpc_id              = module.vpc.vpc_id
   private_subnet_ids  = module.vpc.private_subnet_ids
   redis_host          = module.elasticache.redis_host
-  rapidapi_secret_arn = module.secrets.rapidapi_secret_arn
+  adzuna_secret_arn = module.secrets.adzuna_secret_arn
   lambda_role_arn     = module.iam.lambda_role_arn
 }
 
