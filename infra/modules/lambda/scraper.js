@@ -3,61 +3,80 @@ const { createClient } = require('redis');
 
 const secrets = new SecretsManagerClient({ region: process.env.AWS_REGION_NAME });
 
-async function getRapidApiKey() {
+async function getAdzunaCredentials() {
   const res = await secrets.send(new GetSecretValueCommand({
-    SecretId: process.env.RAPIDAPI_SECRET_ARN,
+    SecretId: process.env.ADZUNA_SECRET_ARN,
   }));
-  return res.SecretString;
+  return JSON.parse(res.SecretString); // { app_id, app_key }
 }
 
-async function fetchJobs(query, rapidApiKey) {
-  const url = `https://jsearch.p.rapidapi.com/search-v2?query=${encodeURIComponent(query)}&num_pages=1&country=us&date_posted=week`;
-  const res = await fetch(url, {
-    headers: {
-      'x-rapidapi-host': 'jsearch.p.rapidapi.com',
-      'x-rapidapi-key': rapidApiKey,
-    },
+async function fetchJobs(query, appId, appKey) {
+  const params = new URLSearchParams({
+    app_id:          appId,
+    app_key:         appKey,
+    results_per_page:'20',
+    what:            query,
+    where:           'new york',
+    category:        'it-jobs',
+    sort_by:         'date',
   });
+
+  const url = `https://api.adzuna.com/v1/api/jobs/us/search/1?${params}`;
+  const res = await fetch(url);
   const data = await res.json();
-  console.log(`Query ${query} - status: ${data.status}, jobs: ${data.data?.jobs?.length ?? 0}`);
-  return data.data.jobs.map(job => ({
-    id:          job.job_id,
-    title:       job.job_title,
-    company:     job.employer_name,
-    location:    job.job_city && job.job_state
-                   ? `${job.job_city}, ${job.job_state}`
-                   : job.job_location ?? job.job_country,
-    remote:      job.job_is_remote ?? false,
-    description: job.job_description?.slice(0, 2000) ?? '',
-    url:         job.job_apply_link ?? '',
-    posted:      job.job_posted_at_datetime_utc ?? new Date().toISOString(),
+
+  console.log(`Query "${query}" - count: ${data.count ?? 0}, results: ${data.results?.length ?? 0}`);
+
+  if (!data.results || !Array.isArray(data.results)) {
+    console.log('Unexpected response:', JSON.stringify(data).slice(0, 300));
+    return [];
+  }
+
+  return data.results.map(job => ({
+    id:          job.id,
+    title:       job.title,
+    company:     job.company?.display_name ?? 'Unknown',
+    location:    job.location?.display_name ?? 'New York',
+    remote:      false,
+    description: job.description ?? '',
+    url:         job.redirect_url ?? '',
+    posted:      job.created ?? new Date().toISOString(),
     salary: {
-      min:     job.job_min_salary ?? null,
-      max:     job.job_max_salary ?? null,
-      period:  job.job_salary_period ?? null,
-      display: job.job_salary_string ?? null,
+      min:     job.salary_min ?? null,
+      max:     job.salary_max ?? null,
+      period:  'YEAR',
+      display: job.salary_min
+        ? `$${Math.round(job.salary_min / 1000)}K - $${Math.round(job.salary_max / 1000)}K`
+        : null,
     },
   }));
 }
 
 exports.handler = async () => {
-  const rapidApiKey = await getRapidApiKey();
-  console.log('API key length:', rapidApiKey?.length ?? 0);
+  console.log('Job scraper started');
+
+  const { app_id, app_key } = await getAdzunaCredentials();
+  console.log('Adzuna credentials fetched');
 
   const queries = JSON.parse(process.env.JOB_QUERIES);
+  console.log('Queries:', queries);
 
-  const redis = createClient({ socket: { host: process.env.REDIS_HOST, port: 6379 } });
+  const redis = createClient({
+    socket: { host: process.env.REDIS_HOST, port: 6379 },
+  });
   await redis.connect();
+  console.log('Redis connected');
 
   try {
     for (const query of queries) {
-      const jobs = await fetchJobs(query, rapidApiKey);
+      const jobs = await fetchJobs(query, app_id, app_key);
       const key = `jobs:${query.replace(/\s+/g, '_').toLowerCase()}`;
-      await redis.setEx(key, 14400, JSON.stringify(jobs)); // TTL 4 hours
+      await redis.setEx(key, 14400, JSON.stringify(jobs));
       console.log(`Cached ${jobs.length} jobs for "${query}"`);
     }
-    console.log('Job scraper completed');
+    console.log('Job scraper completed successfully');
   } finally {
     await redis.disconnect();
+    console.log('Redis disconnected');
   }
 };

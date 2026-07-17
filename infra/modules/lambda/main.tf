@@ -1,10 +1,10 @@
-variable "project_name"        {}
-variable "aws_region"          {}
-variable "vpc_id"              {}
-variable "private_subnet_ids"  { type = list(string) }
-variable "redis_host"          {}
-variable "rapidapi_secret_arn" {}
-variable "lambda_role_arn"     {}
+variable "project_name"       {}
+variable "aws_region"         {}
+variable "vpc_id"             {}
+variable "private_subnet_ids" { type = list(string) }
+variable "redis_host"         {}
+variable "adzuna_secret_arn"  {}
+variable "lambda_role_arn"    {}
 
 resource "aws_security_group" "lambda" {
   name   = "${var.project_name}-lambda-sg"
@@ -18,13 +18,11 @@ resource "aws_security_group" "lambda" {
   }
 }
 
-# Install npm deps and zip together
 resource "null_resource" "lambda_build" {
   triggers = {
-    scraper_hash     = filemd5("${path.module}/scraper.js")
-    package_hash     = filemd5("${path.module}/package.json")
+    scraper_hash = filemd5("${path.module}/scraper.js")
+    package_hash = filemd5("${path.module}/package.json")
   }
-
   provisioner "local-exec" {
     command     = "npm install --production"
     working_dir = path.module
@@ -33,11 +31,10 @@ resource "null_resource" "lambda_build" {
 
 data "archive_file" "scraper" {
   type        = "zip"
-  source_dir  = path.module          # zips scraper.js + node_modules
+  source_dir  = path.module
   output_path = "${path.module}/scraper.zip"
   excludes    = ["*.tf", "*.zip", "*.example"]
-
-  depends_on = [null_resource.lambda_build]
+  depends_on  = [null_resource.lambda_build]
 }
 
 resource "aws_lambda_function" "scraper" {
@@ -52,14 +49,14 @@ resource "aws_lambda_function" "scraper" {
 
   environment {
     variables = {
-      REDIS_HOST          = var.redis_host
-      RAPIDAPI_SECRET_ARN = var.rapidapi_secret_arn
-      AWS_REGION_NAME     = var.aws_region
-      JOB_QUERIES = jsonencode([
-        "senior software engineer New York",
-        "senior platform engineer New York",
-        "site reliability engineer New York",
-        "staff engineer New York",
+      REDIS_HOST         = var.redis_host
+      ADZUNA_SECRET_ARN  = var.adzuna_secret_arn
+      AWS_REGION_NAME    = var.aws_region
+      JOB_QUERIES        = jsonencode([
+        "senior software engineer",
+        "senior platform engineer",
+        "site reliability engineer",
+        "staff engineer",
       ])
     }
   }
@@ -72,11 +69,9 @@ resource "aws_lambda_function" "scraper" {
   depends_on = [data.archive_file.scraper]
 }
 
-# EventBridge rule — runs every 4 hours
 resource "aws_cloudwatch_event_rule" "scraper" {
   name                = "${var.project_name}-scraper-schedule"
   schedule_expression = "rate(4 hours)"
-  force_destroy       = true
 }
 
 resource "aws_cloudwatch_event_target" "scraper" {
@@ -93,7 +88,6 @@ resource "aws_lambda_permission" "eventbridge" {
   source_arn    = aws_cloudwatch_event_rule.scraper.arn
 }
 
-# CloudWatch log group for Lambda
 resource "aws_cloudwatch_log_group" "scraper" {
   name              = "/aws/lambda/${var.project_name}-job-scraper"
   retention_in_days = 7

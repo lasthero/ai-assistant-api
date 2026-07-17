@@ -1,14 +1,18 @@
-variable "project_name" {}
-variable "rapidapi_key" { sensitive = true }
+variable "project_name"   {}
+variable "adzuna_app_id"  { sensitive = true }
+variable "adzuna_app_key" { sensitive = true }
 
-resource "aws_secretsmanager_secret" "rapidapi" {
-  name                    = "${var.project_name}/rapidapi-key"
+resource "aws_secretsmanager_secret" "adzuna" {
+  name                    = "${var.project_name}/adzuna"
   recovery_window_in_days = 7
 }
 
-resource "aws_secretsmanager_secret_version" "rapidapi" {
-  secret_id     = aws_secretsmanager_secret.rapidapi.id
-  secret_string = var.rapidapi_key
+resource "aws_secretsmanager_secret_version" "adzuna" {
+  secret_id     = aws_secretsmanager_secret.adzuna.id
+  secret_string = jsonencode({
+    app_id  = var.adzuna_app_id
+    app_key = var.adzuna_app_key
+  })
 }
 
-output "rapidapi_secret_arn" { value = aws_secretsmanager_secret.rapidapi.arn }
+output "adzuna_secret_arn" { value = aws_secretsmanager_secret.adzuna.arn }
