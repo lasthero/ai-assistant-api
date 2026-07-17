@@ -5,13 +5,13 @@ import { analyzeJobFit } from '../lib/bedrock';
 
 export async function analyzeHandler(req: Request, res: Response) {
   try {
-    const { jobQuery } = req.body as { jobQuery?: string };
+
+    const { jobQuery, resumeText } = req.body;
 
     // fetch resume and jobs in parallel
-    const [resumeText, jobs] = await Promise.all([
-      fetchResumeText(),
-      getAllCachedJobs(),
-    ]);
+    const resume = resumeText ?? await fetchResumeText();
+    const jobs = await getAllCachedJobs();
+    
 
     if (!jobs.length) {
       return res.status(503).json({

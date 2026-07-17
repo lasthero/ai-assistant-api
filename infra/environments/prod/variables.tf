@@ -14,7 +14,12 @@ variable "s3_bucket_name" {
   description = "S3 bucket containing resume PDF"
 }
 
-variable "rapidapi_key" {
-  description = "RapidAPI key for JSearch"
+variable "adzuna_app_id" {
+  description = "Adzuna API app ID"
+  sensitive   = true
+}
+
+variable "adzuna_app_key" {
+  description = "Adzuna API app key"
   sensitive   = true
 }
