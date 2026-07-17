@@ -43,7 +43,8 @@ jobs:
       AWS_ACCESS_KEY_ID:     ${{ secrets.AWS_ACCESS_KEY_ID }}
       AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       AWS_REGION:            ${{ secrets.AWS_REGION }}
-      TF_VAR_rapidapi_key:   ${{ secrets.TF_VAR_rapidapi_key }}
+      TF_VAR_adzuna_app_id:   ${{ secrets.TF_VAR_adzuna_app_id }}
+      TF_VAR_adzuna_app_key:   ${{ secrets.TF_VAR_adzuna_app_key }}
       TF_VAR_s3_bucket_name: ${{ secrets.TF_VAR_s3_bucket_name }}
 
     steps:

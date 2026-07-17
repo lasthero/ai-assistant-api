@@ -8,7 +8,7 @@ variable "execution_role_arn"  {}
 variable "task_role_arn"       {}
 variable "redis_host"          {}
 variable "s3_bucket"           {}
-variable "rapidapi_secret_arn" {}
+variable "adzuna_secret_arn" {}
 
 # Security group for ALB
 resource "aws_security_group" "alb" {
@@ -126,7 +126,7 @@ resource "aws_ecs_task_definition" "ai-assistant" {
     ]
     secrets = [{
       name      = "RAPIDAPI_KEY"
-      valueFrom = var.rapidapi_secret_arn
+      valueFrom = var.adzuna_secret_arn
     }]
     logConfiguration = {
       logDriver = "awslogs"
