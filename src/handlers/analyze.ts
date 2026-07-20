@@ -8,10 +8,11 @@ export async function analyzeHandler(req: Request, res: Response) {
 
     const { jobQuery, resumeText } = req.body;
 
-    // fetch resume and jobs in parallel
     const resume = resumeText ?? await fetchResumeText();
+
     const jobs = await getAllCachedJobs();
-    
+    console.log('[analyze] total cached jobs:', jobs.length);
+    console.log('[analyze] jobQuery:', jobQuery);
 
     if (!jobs.length) {
       return res.status(503).json({
@@ -26,8 +27,9 @@ export async function analyzeHandler(req: Request, res: Response) {
           j.description.toLowerCase().includes(jobQuery.toLowerCase())
         )
       : jobs;
+    console.log('[analyze] filtered jobs:', filtered.length);
 
-    const analysis = await analyzeJobFit(resumeText, filtered.length ? filtered : jobs);
+    const analysis = await analyzeJobFit(resume, filtered);
 
     return res.json({
       jobsAnalyzed: filtered.length,

@@ -124,10 +124,6 @@ resource "aws_ecs_task_definition" "ai-assistant" {
       { name = "S3_BUCKET",  value = var.s3_bucket },
       { name = "AWS_REGION", value = var.aws_region },
     ]
-    secrets = [{
-      name      = "RAPIDAPI_KEY"
-      valueFrom = var.adzuna_secret_arn
-    }]
     logConfiguration = {
       logDriver = "awslogs"
       options = {

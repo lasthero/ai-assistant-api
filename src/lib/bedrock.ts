@@ -52,6 +52,10 @@ export type JobMatch = {
   gaps:           string[];
   recommendation: 'strong yes' | 'yes' | 'maybe' | 'no';
   applyUrl:       string;
+  description?:   string;
+  location?:      string;
+  remote?:        boolean;
+  salary?:        { min: number | null; max: number | null; period: string | null; display?: string | null } | null;
 };
 
 export type AnalysisResult = {
@@ -115,10 +119,17 @@ Include only top 5 matches sorted by matchScore descending.`;
   const result = JSON.parse(jsonMatch[0]) as AnalysisResult;
 
   // attach apply URLs from original job data
-  result.topMatches = result.topMatches.map(match => ({
-    ...match,
-    applyUrl: topJobs.find(j => j.id === match.jobId)?.url ?? match.applyUrl,
-  }));
+  result.topMatches = result.topMatches.map(match => {
+    const originalJob = topJobs.find(j => j.id === match.jobId);
+    return {
+      ...match,
+      applyUrl:    originalJob?.url ?? match.applyUrl,
+      description: originalJob?.description ?? '',
+      location:    originalJob?.location ?? '',
+      remote:      originalJob?.remote ?? false,
+      salary:      originalJob?.salary ?? null,
+    };
+  });
 
   return result;
 }

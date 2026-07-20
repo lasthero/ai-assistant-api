@@ -49,7 +49,7 @@ aws s3 mb s3://chihho-terraform-state --region us-east-1
 cd infra/environments/prod
 
 terraform init
-terraform plan -var="s3_bucket_name=chihho-dev-assets" -var="rapidapi_key=YOUR_KEY"
+terraform plan -var="s3_bucket_name=chihho-dev-assets" -var="adzuna_app_id=APP_ID" -var="adzuna_app_key=APP_KEY"
 terraform apply
 ```
 

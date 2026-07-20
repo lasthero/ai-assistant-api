@@ -24,9 +24,9 @@ terraform import module.lambda.aws_cloudwatch_log_group.scraper /aws/lambda/${PR
 
 echo "→ Importing Secrets Manager secret..."
 SECRET_ARN=$(aws secretsmanager describe-secret \
-  --secret-id ${PROJECT}/rapidapi-key \
+  --secret-id ${PROJECT}/adzuna \
   --query 'ARN' --output text --region $REGION)
-terraform import module.secrets.aws_secretsmanager_secret.rapidapi $SECRET_ARN
+terraform import module.secrets.aws_secretsmanager_secret.adzuna $SECRET_ARN
 
 echo "→ Importing Lambda function..."
 terraform import module.lambda.aws_lambda_function.scraper ${PROJECT}-job-scraper
@@ -64,5 +64,11 @@ terraform import module.elasticache.aws_elasticache_subnet_group.main \
 echo "→ Importing ElastiCache cluster..."
 terraform import module.elasticache.aws_elasticache_cluster.jobs \
   ${PROJECT}-jobs
+
+echo "→ Importing Adzuna secret..."
+terraform import module.secrets.aws_secretsmanager_secret.adzuna \
+  $(aws secretsmanager describe-secret \
+    --secret-id chihho-ai-assistant/adzuna \
+    --query 'ARN' --output text --region $REGION)
 
 echo "✓ All imports done — run terraform apply"
