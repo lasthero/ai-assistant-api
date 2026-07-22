@@ -52,12 +52,10 @@ resource "aws_lambda_function" "scraper" {
       REDIS_HOST         = var.redis_host
       ADZUNA_SECRET_ARN  = var.adzuna_secret_arn
       AWS_REGION_NAME    = var.aws_region
-      JOB_QUERIES        = jsonencode([
-        "senior software engineer",
-        "senior platform engineer",
-        "site reliability engineer",
-        "staff engineer",
-      ])
+      # JOB_QUERIES removed — the scraper now reads the most-searched real
+      # user queries from Redis (query_popularity sorted set) at runtime,
+      # falling back to a small seed list only when no usage data exists yet.
+      # See scraper.js SEED_QUERIES.
     }
   }
 

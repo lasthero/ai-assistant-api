@@ -1,7 +1,7 @@
 // ai-assistant-api/src/handlers/resume.ts
 // Accepts base64 PDF from mobile, extracts text with pdf2json, parses with Bedrock
 import { Request, Response } from 'express';
-import { invokeLlama } from '../lib/bedrock';
+import { invokeLlama, extractJson } from '../lib/bedrock';
 
 export async function parsePdfHandler(req: Request, res: Response) {
   try {
@@ -11,23 +11,18 @@ export async function parsePdfHandler(req: Request, res: Response) {
       return res.status(400).json({ error: 'pdfBase64 is required' });
     }
 
-    // convert base64 to buffer
     const buffer = Buffer.from(pdfBase64, 'base64');
     console.log('[parsePdf] buffer size:', buffer.length);
 
-    // extract text with pdf2json
     const PDFParser = (await import('pdf2json')).default;
     const text = await new Promise<string>((resolve, reject) => {
       const parser = new (PDFParser as any)(null, true);
       parser.on('pdfParser_dataReady', () => {
         const extracted = parser.getRawTextContent();
         console.log('[parsePdf] extracted text length:', extracted.length);
-        console.log('[parsePdf] text preview:', extracted.slice(0, 200));
         resolve(extracted);
       });
-      parser.on('pdfParser_dataError', (err: any) => {
-        reject(new Error(err.parserError));
-      });
+      parser.on('pdfParser_dataError', (err: any) => reject(new Error(err.parserError)));
       parser.parseBuffer(buffer);
     });
 
@@ -35,24 +30,32 @@ export async function parsePdfHandler(req: Request, res: Response) {
       return res.status(400).json({ error: 'Could not extract text from PDF — is the file a valid resume?' });
     }
 
-    // parse extracted text with Bedrock
     const result = await invokeLlama({
-      system: `You are a JSON resume parser. Return ONLY a valid JSON object. No explanation, no markdown, no preamble. Start with { and end with }.`,
+      system: `You are a JSON resume parser for a general-audience career app. Candidates come from ALL industries — healthcare, law, education, sales, skilled trades, creative fields, engineering, finance, and more. Do not assume a technical/software background.
+Return ONLY a valid JSON object. No explanation, no markdown, no preamble. Start with { and end with }.`,
       messages: [{
         role: 'user',
-        content: `Parse this resume text into JSON. Do not include phone number.
+        content: `Parse this resume into JSON. Do not include phone number.
 
 Schema:
 {
   "name": string,
   "alias": string or null,
   "title": string,
-  "contact": { "email": string, "linkedin": string, "website": string or null },
+  "industry": string or null (e.g. "Healthcare", "Software Engineering", "Education", "Sales", "Legal", "Skilled Trades"),
+  "contact": { "email": string, "linkedin": string or null, "website": string or null, "portfolioUrl": string or null },
   "skills": { [category: string]: string[] },
   "experience": [{ "title": string, "company": string, "period": string, "bullets": string[] }],
+  "education": [{ "degree": string, "institution": string, "year": string or null }],
   "additional": string[],
-  "certifications": [{ "name": string, "year": string }]
+  "credentials": [{ "name": string, "issuer": string or null, "year": string or null }],
+  "achievements": string[]
 }
+
+Notes on fields:
+- "credentials" covers certifications, licenses (e.g. RN, PE, bar admission), and professional registrations
+- "achievements" covers quantifiable wins: quota attainment, awards, publications, patents, etc.
+- Adapt field content to the candidate's actual field — a nurse's "credentials" differ from an engineer's
 
 Resume text:
 ${text.slice(0, 4000)}`,
@@ -61,11 +64,8 @@ ${text.slice(0, 4000)}`,
       temperature: 0.1,
     });
 
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error('Could not parse resume — please try again');
-
-    const resume = JSON.parse(jsonMatch[0]);
-    console.log('[parsePdf] parsed name:', resume.name);
+    const resume = extractJson<any>(result);
+    console.log('[parsePdf] parsed name:', resume.name, '| industry:', resume.industry);
     return res.json({ resume });
 
   } catch (err: any) {

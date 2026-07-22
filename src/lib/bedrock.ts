@@ -4,6 +4,61 @@ import { Job } from './cache';
 const bedrock = new BedrockRuntimeClient({ region: process.env.AWS_REGION ?? 'us-east-1' });
 const MODEL_ID = 'us.meta.llama3-1-8b-instruct-v1:0';
 
+// ── Robust JSON extraction ────────────────────────────────────────────────────
+// Llama output can include stray text/markdown around the JSON, or truncate
+// mid-structure if maxTokens is too low. A naive greedy regex (first { to last })
+// can grab the wrong span. This walks brace-by-brace to find the true matching
+// close for the first {, then validates it actually parses.
+export function extractJson<T>(raw: string): T {
+  const text = raw.trim().replace(/^```json\n?/, '').replace(/^```\n?/, '').replace(/\n?```$/, '');
+
+  const braceStart   = text.indexOf('{');
+  const bracketStart = text.indexOf('[');
+
+  // If a top-level array appears before (or instead of) any object, the model
+  // wrapped its output wrong (or got truncated into just one array item).
+  // Our schemas are always top-level objects, so this is always an error case —
+  // silently grabbing the first { inside the array would return a single
+  // fragment (e.g. one experience entry) instead of the full expected shape.
+  if (bracketStart !== -1 && (braceStart === -1 || bracketStart < braceStart)) {
+    console.error('[extractJson] response is array-wrapped, expected an object:', text.slice(0, 300));
+    throw new Error('AI response had the wrong shape — please try again');
+  }
+
+  if (braceStart === -1) {
+    throw new Error('Response did not contain any JSON');
+  }
+
+  let depth = 0;
+  let end = -1;
+  for (let i = braceStart; i < text.length; i++) {
+    if (text[i] === '{') depth++;
+    if (text[i] === '}') depth--;
+    if (depth === 0) { end = i; break; }
+  }
+
+  if (end === -1) {
+    console.error('[extractJson] unbalanced braces — likely truncated:', text.slice(0, 500));
+    throw new Error('Response was cut off before finishing — try again');
+  }
+
+  const candidate = text.slice(braceStart, end + 1);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(candidate);
+  } catch {
+    console.error('[extractJson] JSON.parse failed on:', candidate.slice(0, 500));
+    throw new Error('Could not parse the AI response');
+  }
+
+  if (Array.isArray(parsed) || typeof parsed !== 'object' || parsed === null) {
+    console.error('[extractJson] parsed result is not an object:', candidate.slice(0, 300));
+    throw new Error('AI response had the wrong shape — please try again');
+  }
+
+  return parsed as T;
+}
+
 // ── Generic Llama invocation ─────────────────────────────────────────────────
 export async function invokeLlama({
   system,
@@ -70,8 +125,8 @@ export async function analyzeJobFit(
 ): Promise<AnalysisResult> {
   const topJobs = jobs.slice(0, 10);
 
-  const system = `You are an expert career coach and technical recruiter specializing in software engineering roles.
-Analyze the candidate's resume against job postings and return structured JSON only.
+  const system = `You are an expert career coach and recruiter who evaluates candidate fit across ALL industries — healthcare, law, education, sales, skilled trades, creative fields, engineering, finance, and more.
+Analyze the candidate's background against job postings and return structured JSON only.
 Return ONLY valid JSON with no explanation or markdown.`;
 
   const userMessage = `Resume:
@@ -113,10 +168,7 @@ Include only top 5 matches sorted by matchScore descending.`;
     temperature: 0.2,
   });
 
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) throw new Error('No JSON found in Bedrock response');
-
-  const result = JSON.parse(jsonMatch[0]) as AnalysisResult;
+  const result = extractJson<AnalysisResult>(text);
 
   // attach apply URLs from original job data
   result.topMatches = result.topMatches.map(match => {

@@ -12,13 +12,13 @@ async function getAdzunaCredentials() {
 
 async function fetchJobs(query, appId, appKey) {
   const params = new URLSearchParams({
-    app_id:          appId,
-    app_key:         appKey,
-    results_per_page:'20',
-    what:            query,
-    where:           'new york',
-    category:        'it-jobs',
-    sort_by:         'date',
+    app_id:           appId,
+    app_key:          appKey,
+    results_per_page: '20',
+    what:             query,
+    sort_by:          'date',
+    // no category filter — this app serves job seekers across all industries,
+    // not just tech. Category was previously hardcoded to 'it-jobs'.
   });
 
   const url = `https://api.adzuna.com/v1/api/jobs/us/search/1?${params}`;
@@ -36,8 +36,8 @@ async function fetchJobs(query, appId, appKey) {
     id:          job.id,
     title:       job.title,
     company:     job.company?.display_name ?? 'Unknown',
-    location:    job.location?.display_name ?? 'New York',
-    remote:      false,
+    location:    job.location?.display_name ?? 'United States',
+    remote:      /remote/i.test(job.title) || /remote/i.test(job.location?.display_name ?? ''),
     description: job.description ?? '',
     url:         job.redirect_url ?? '',
     posted:      job.created ?? new Date().toISOString(),
@@ -58,6 +58,9 @@ exports.handler = async () => {
   const { app_id, app_key } = await getAdzunaCredentials();
   console.log('Adzuna credentials fetched');
 
+  // broad set of popular queries across industries — this is just a "warm cache"
+  // for common searches. Anything not covered here is fetched live on-demand
+  // by the /analyze endpoint, so the app isn't limited to this list.
   const queries = JSON.parse(process.env.JOB_QUERIES);
   console.log('Queries:', queries);
 
@@ -71,7 +74,7 @@ exports.handler = async () => {
     for (const query of queries) {
       const jobs = await fetchJobs(query, app_id, app_key);
       const key = `jobs:${query.replace(/\s+/g, '_').toLowerCase()}`;
-      await redis.setEx(key, 14400, JSON.stringify(jobs));
+      await redis.setEx(key, 14400, JSON.stringify(jobs)); // 4hr TTL
       console.log(`Cached ${jobs.length} jobs for "${query}"`);
     }
     console.log('Job scraper completed successfully');

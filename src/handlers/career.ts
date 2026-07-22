@@ -17,8 +17,9 @@ export async function careerHandler(req: Request, res: Response) {
       return res.status(400).json({ error: 'messages array is required' });
     }
 
-    // ── JSON resume parsing (strict schema, no candidate context needed) ────
     const lastMessage = messages[messages.length - 1]?.content ?? '';
+
+    // ── JSON resume parsing (strict schema, no candidate context needed) ────
     const isParsing = isParsingRequest || lastMessage.includes('Parse this resume');
 
     if (isParsing) {
@@ -40,6 +41,33 @@ Adapt field content to the candidate's actual field — do not assume a technica
       });
     }
 
+    // Any request that itself asks for structured JSON (e.g. interview prep)
+    // must NOT be told to respond in "plain text, conversational" style —
+    // those instructions directly conflict and cause Bedrock to blend prose
+    // with JSON, producing malformed output. Detect this and switch modes.
+    const wantsJson = /return only valid json/i.test(lastMessage);
+
+    if (wantsJson) {
+      const result = await invokeLlama({
+        system: `You are a career advisor helping a job seeker who may work in any industry — healthcare, law, education, sales, skilled trades, creative fields, engineering, or elsewhere.
+
+Candidate background:
+${resumeText.slice(0, 2500)}
+
+The user's message specifies an exact JSON schema to follow. You MUST:
+- Return ONLY a single valid JSON object matching that schema exactly
+- No explanation, no markdown code fences, no text before or after the JSON
+- Do not assume a technical/software background unless the resume indicates one
+- Make all string content specific and tailored to this candidate's actual field and experience
+- Ensure the JSON is complete and well-formed — do not truncate mid-array or mid-object`,
+        messages,
+        maxTokens: 2048, // higher budget — structured JSON with multiple array items needs more room than free text
+        temperature: 0.3,
+      });
+      return res.json({ content: result });
+    }
+
+    // ── Plain conversational career advice ───────────────────────────────────
     const result = await invokeLlama({
       system: `You are a career advisor helping a job seeker who may work in any industry — healthcare, law, education, sales, skilled trades, creative fields, engineering, or elsewhere.
 

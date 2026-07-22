@@ -8,7 +8,7 @@ variable "execution_role_arn"  {}
 variable "task_role_arn"       {}
 variable "redis_host"          {}
 variable "s3_bucket"           {}
-variable "adzuna_secret_arn" {}
+variable "adzuna_secret_arn"   {}
 
 # Security group for ALB
 resource "aws_security_group" "alb" {
@@ -119,10 +119,14 @@ resource "aws_ecs_task_definition" "ai-assistant" {
     image = "${var.ecr_repository_url}:latest"
     portMappings = [{ containerPort = 3000 }]
     environment = [
-      { name = "PORT",       value = "3000" },
-      { name = "REDIS_HOST", value = var.redis_host },
-      { name = "S3_BUCKET",  value = var.s3_bucket },
-      { name = "AWS_REGION", value = var.aws_region },
+      { name = "PORT",              value = "3000" },
+      { name = "REDIS_HOST",        value = var.redis_host },
+      { name = "S3_BUCKET",         value = var.s3_bucket },
+      { name = "AWS_REGION",        value = var.aws_region },
+      # plain env var holding the ARN string — the app calls GetSecretValue
+      # itself at runtime via the task role, so this is NOT an ECS "secrets"
+      # injection (which would inject the secret's actual value instead)
+      { name = "ADZUNA_SECRET_ARN", value = var.adzuna_secret_arn },
     ]
     logConfiguration = {
       logDriver = "awslogs"
@@ -132,6 +136,9 @@ resource "aws_ecs_task_definition" "ai-assistant" {
         awslogs-stream-prefix = "ecs"
       }
     }
+    # no container-level healthCheck — ALB health check is sufficient.
+    # A container healthCheck was causing tasks to be killed as UNKNOWN
+    # since curl wasn't reliably available in the image (see prior fix).
   }])
 }
 
