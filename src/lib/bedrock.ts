@@ -105,6 +105,8 @@ export type JobMatch = {
   matchSummary:   string;
   strengths:      string[];
   gaps:           string[];
+  requirements:         string[]; // "must have" bullet points extracted from the posting
+  preferredRequirements: string[]; // "nice to have" bullet points, if the posting distinguishes them
   recommendation: 'strong yes' | 'yes' | 'maybe' | 'no';
   applyUrl:       string;
   description?:   string;
@@ -137,7 +139,7 @@ ${topJobs.map((j, i) => `
 [${i + 1}] ID: ${j.id}
 Title: ${j.title} at ${j.company}
 Location: ${j.location} ${j.remote ? '(Remote)' : ''}
-Description: ${j.description.slice(0, 500)}
+Description: ${j.description.slice(0, 1200)}
 `).join('\n')}
 
 Return ONLY this JSON structure:
@@ -152,6 +154,8 @@ Return ONLY this JSON structure:
       "matchSummary": "one sentence on why this is a good match",
       "strengths": ["strength 1", "strength 2"],
       "gaps": ["gap 1"],
+      "requirements": ["required qualification or skill, extracted directly from the posting text"],
+      "preferredRequirements": ["nice-to-have qualification, only if the posting distinguishes these from required — otherwise an empty array"],
       "recommendation": "yes",
       "applyUrl": "url"
     }
@@ -159,12 +163,14 @@ Return ONLY this JSON structure:
   "skillGaps": ["gap across all jobs"]
 }
 
+For "requirements" and "preferredRequirements": extract them from the actual posting text as concise bullet points (5-10 words each), not paraphrased summaries. If a posting doesn't clearly separate required vs. preferred qualifications, put everything under "requirements" and leave "preferredRequirements" as an empty array.
+
 Include only top 5 matches sorted by matchScore descending.`;
 
   const text = await invokeLlama({
     system,
     messages: [{ role: 'user', content: userMessage }],
-    maxTokens: 2048,
+    maxTokens: 3072,
     temperature: 0.2,
   });
 
@@ -175,11 +181,13 @@ Include only top 5 matches sorted by matchScore descending.`;
     const originalJob = topJobs.find(j => j.id === match.jobId);
     return {
       ...match,
-      applyUrl:    originalJob?.url ?? match.applyUrl,
-      description: originalJob?.description ?? '',
-      location:    originalJob?.location ?? '',
-      remote:      originalJob?.remote ?? false,
-      salary:      originalJob?.salary ?? null,
+      applyUrl:              originalJob?.url ?? match.applyUrl,
+      description:           originalJob?.description ?? '',
+      location:              originalJob?.location ?? '',
+      remote:                originalJob?.remote ?? false,
+      salary:                originalJob?.salary ?? null,
+      requirements:          match.requirements ?? [],
+      preferredRequirements: match.preferredRequirements ?? [],
     };
   });
 

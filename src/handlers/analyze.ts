@@ -28,35 +28,56 @@ export async function analyzeHandler(req: Request, res: Response) {
       );
     }
 
-    // 1. try the background cache first (fast, free)
-    let jobs = jobQuery
-      ? (await getAllCachedJobs()).filter(j =>
-          j.title.toLowerCase().includes(jobQuery.toLowerCase()) ||
-          j.description.toLowerCase().includes(jobQuery.toLowerCase())
-        )
-      : await getAllCachedJobs();
+    let jobs: Awaited<ReturnType<typeof getAllCachedJobs>> = [];
 
-    // 2. if the cache doesn't have enough relevant results, search Adzuna live —
-    // this is what makes the app work for ANY industry/query, not just the
-    // handful of tech roles the background scraper pre-caches
-    if (jobQuery && jobs.length < MIN_RESULTS_BEFORE_LIVE_FETCH) {
-      console.log(`[analyze] cache had ${jobs.length} results for "${jobQuery}" — fetching live from Adzuna`);
+    if (jobQuery && location) {
+      // A location was explicitly requested — the background cache has no
+      // concept of location, so it can't be trusted here even if it has
+      // plenty of keyword matches. Always go live in this case, and key the
+      // cache by query+location together so different locations for the same
+      // keyword never collide and serve each other's stale results.
+      console.log(`[analyze] location provided ("${location}") — always fetching live for "${jobQuery}"`);
 
-      const liveKey = `jobs:live:${jobQuery.replace(/\s+/g, '_').toLowerCase()}`;
+      const liveKey = `jobs:live:${jobQuery.replace(/\s+/g, '_').toLowerCase()}:${location.replace(/\s+/g, '_').toLowerCase()}`;
       const redis = await getRedisClient();
       const cachedLive = await redis.get(liveKey);
 
-      let liveJobs;
       if (cachedLive) {
-        liveJobs = JSON.parse(cachedLive);
+        jobs = JSON.parse(cachedLive);
       } else {
-        liveJobs = await fetchAdzunaJobs(jobQuery, location);
-        await redis.setEx(liveKey, LIVE_SEARCH_CACHE_TTL, JSON.stringify(liveJobs));
+        jobs = await fetchAdzunaJobs(jobQuery, location);
+        await redis.setEx(liveKey, LIVE_SEARCH_CACHE_TTL, JSON.stringify(jobs));
       }
 
-      // merge — live results plus whatever background cache had, de-duped by id
-      const seen = new Set(jobs.map(j => j.id));
-      jobs = [...jobs, ...liveJobs.filter((j: any) => !seen.has(j.id))];
+    } else {
+      // no location specified — original behavior: try the background
+      // cache first (fast, free), fall back to a live nationwide search
+      // only if the cache is too thin for this keyword
+      jobs = jobQuery
+        ? (await getAllCachedJobs()).filter(j =>
+            j.title.toLowerCase().includes(jobQuery.toLowerCase()) ||
+            j.description.toLowerCase().includes(jobQuery.toLowerCase())
+          )
+        : await getAllCachedJobs();
+
+      if (jobQuery && jobs.length < MIN_RESULTS_BEFORE_LIVE_FETCH) {
+        console.log(`[analyze] cache had ${jobs.length} results for "${jobQuery}" — fetching live from Adzuna`);
+
+        const liveKey = `jobs:live:${jobQuery.replace(/\s+/g, '_').toLowerCase()}`;
+        const redis = await getRedisClient();
+        const cachedLive = await redis.get(liveKey);
+
+        let liveJobs;
+        if (cachedLive) {
+          liveJobs = JSON.parse(cachedLive);
+        } else {
+          liveJobs = await fetchAdzunaJobs(jobQuery);
+          await redis.setEx(liveKey, LIVE_SEARCH_CACHE_TTL, JSON.stringify(liveJobs));
+        }
+
+        const seen = new Set(jobs.map(j => j.id));
+        jobs = [...jobs, ...liveJobs.filter((j: any) => !seen.has(j.id))];
+      }
     }
 
     if (!jobs.length) {
