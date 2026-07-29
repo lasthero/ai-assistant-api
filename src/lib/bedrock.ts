@@ -165,7 +165,7 @@ Return ONLY this JSON structure:
 
 For "requirements" and "preferredRequirements": extract them from the actual posting text as concise bullet points (5-10 words each), not paraphrased summaries. If a posting doesn't clearly separate required vs. preferred qualifications, put everything under "requirements" and leave "preferredRequirements" as an empty array.
 
-Include only top 5 matches sorted by matchScore descending.`;
+Only include jobs that are genuine, reasonable matches (matchScore of 30 or higher). Do NOT pad the list with poor or irrelevant matches just to reach 5 — if only 2 or 3 jobs are worth showing, return only those. Sort strictly by matchScore descending, with the highest score first.`;
 
   const text = await invokeLlama({
     system,
@@ -177,19 +177,26 @@ Include only top 5 matches sorted by matchScore descending.`;
   const result = extractJson<AnalysisResult>(text);
 
   // attach apply URLs from original job data
-  result.topMatches = result.topMatches.map(match => {
-    const originalJob = topJobs.find(j => j.id === match.jobId);
-    return {
-      ...match,
-      applyUrl:              originalJob?.url ?? match.applyUrl,
-      description:           originalJob?.description ?? '',
-      location:              originalJob?.location ?? '',
-      remote:                originalJob?.remote ?? false,
-      salary:                originalJob?.salary ?? null,
-      requirements:          match.requirements ?? [],
-      preferredRequirements: match.preferredRequirements ?? [],
-    };
-  });
+  result.topMatches = result.topMatches
+    .map(match => {
+      const originalJob = topJobs.find(j => j.id === match.jobId);
+      return {
+        ...match,
+        applyUrl:              originalJob?.url ?? match.applyUrl,
+        description:           originalJob?.description ?? '',
+        location:              originalJob?.location ?? '',
+        remote:                originalJob?.remote ?? false,
+        salary:                originalJob?.salary ?? null,
+        requirements:          match.requirements ?? [],
+        preferredRequirements: match.preferredRequirements ?? [],
+      };
+    })
+    // defensive guardrails — don't rely solely on the model to follow the
+    // prompt's sorting/filtering instructions. Drop clearly-padded/junk
+    // entries (0 or missing score, or a jobId that doesn't correspond to
+    // any job we actually sent) and always re-sort by score ourselves.
+    .filter(match => (match.matchScore ?? 0) > 0 && topJobs.some(j => j.id === match.jobId))
+    .sort((a, b) => (b.matchScore ?? 0) - (a.matchScore ?? 0));
 
   return result;
 }

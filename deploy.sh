@@ -24,20 +24,4 @@ aws ecs update-service \
   --force-new-deployment \
   --region $REGION
 
-echo "→ Deploying Lambda..."
-cd infra/modules/lambda
-npm install --production
-if command -v zip &> /dev/null; then
-  zip -r scraper.zip scraper.js node_modules package.json
-else
-  # Windows Git Bash — use PowerShell
-  powershell.exe -Command "Compress-Archive -Path scraper.js, node_modules, package.json -DestinationPath scraper.zip -Force"
-fi
-aws lambda update-function-code \
-  --function-name chihho-ai-assistant-job-scraper \
-  --zip-file fileb://scraper.zip \
-  --region $REGION
-cd ../../..
-echo "✓ Lambda deployed"
-
 echo "✓ Deployed successfully"

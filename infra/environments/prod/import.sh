@@ -16,28 +16,15 @@ terraform import module.ecr.aws_ecr_repository.ai-assistant ${PROJECT}-server
 echo "→ Importing IAM roles..."
 terraform import module.iam.aws_iam_role.ecs_execution ${PROJECT}-ecs-execution
 terraform import module.iam.aws_iam_role.ecs_task ${PROJECT}-ecs-task
-terraform import module.iam.aws_iam_role.lambda ${PROJECT}-lambda
 
 echo "→ Importing CloudWatch log groups..."
 terraform import module.ecs.aws_cloudwatch_log_group.ecs /ecs/${PROJECT}
-terraform import module.lambda.aws_cloudwatch_log_group.scraper /aws/lambda/${PROJECT}-job-scraper
 
 echo "→ Importing Secrets Manager secret..."
 SECRET_ARN=$(aws secretsmanager describe-secret \
   --secret-id ${PROJECT}/adzuna \
   --query 'ARN' --output text --region $REGION)
 terraform import module.secrets.aws_secretsmanager_secret.adzuna $SECRET_ARN
-
-echo "→ Importing Lambda function..."
-terraform import module.lambda.aws_lambda_function.scraper ${PROJECT}-job-scraper
-
-echo "→ Importing Lambda permission..."
-terraform import module.lambda.aws_lambda_permission.eventbridge \
-  ${PROJECT}-job-scraper/AllowEventBridge
-
-echo "→ Importing EventBridge rule..."
-terraform import module.lambda.aws_cloudwatch_event_rule.scraper \
-  ${PROJECT}-scraper-schedule
 
 echo "→ Importing ALB..."
 ALB_ARN=$(aws elbv2 describe-load-balancers \

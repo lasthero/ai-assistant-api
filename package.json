@@ -7,7 +7,7 @@
     "dev": "cd src && npm run dev",
     "build": "cd src && npm run build",
     "start": "cd src && npm run start",
-    "install:all": "npm install && cd src && npm install && cd ../infra/modules/lambda && npm install",
+    "install:all": "npm install && cd src && npm install",
     "docker:build": "docker build -t ai-assistant-server .",
     "docker:run": "docker run -p 3000:3000 --env-file .env ai-assistant-server",
     "tf:init": "cd infra/environments/prod && terraform init",

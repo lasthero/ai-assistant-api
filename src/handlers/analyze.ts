@@ -38,7 +38,11 @@ export async function analyzeHandler(req: Request, res: Response) {
       // keyword never collide and serve each other's stale results.
       console.log(`[analyze] location provided ("${location}") — always fetching live for "${jobQuery}"`);
 
-      const liveKey = `jobs:live:${jobQuery.replace(/\s+/g, '_').toLowerCase()}:${location.replace(/\s+/g, '_').toLowerCase()}`;
+      // NOTE: this key must never start with "jobs:" — getAllCachedJobs()
+      // globs "jobs:*" for the no-location nationwide pool, and a location-
+      // scoped cache entry leaking in there would bias "no location"
+      // searches toward whatever location was last searched by anyone.
+      const liveKey = `search:${jobQuery.replace(/\s+/g, '_').toLowerCase()}:${location.replace(/\s+/g, '_').toLowerCase()}`;
       const redis = await getRedisClient();
       const cachedLive = await redis.get(liveKey);
 
@@ -63,7 +67,9 @@ export async function analyzeHandler(req: Request, res: Response) {
       if (jobQuery && jobs.length < MIN_RESULTS_BEFORE_LIVE_FETCH) {
         console.log(`[analyze] cache had ${jobs.length} results for "${jobQuery}" — fetching live from Adzuna`);
 
-        const liveKey = `jobs:live:${jobQuery.replace(/\s+/g, '_').toLowerCase()}`;
+        // same reasoning as the location-scoped key above — must stay out
+        // of the "jobs:*" namespace that getAllCachedJobs() scans.
+        const liveKey = `search:${jobQuery.replace(/\s+/g, '_').toLowerCase()}`;
         const redis = await getRedisClient();
         const cachedLive = await redis.get(liveKey);
 
@@ -81,9 +87,11 @@ export async function analyzeHandler(req: Request, res: Response) {
     }
 
     if (!jobs.length) {
-      return res.status(503).json({
-        error: 'No job postings found for this search. Try a different role or location.',
-      });
+      const message = location
+        ? `No job postings found within 20 miles of "${location}" for this search. Try a different role, a nearby city, or leave location blank to search nationwide.`
+        : 'No job postings found for this search. Try a different role or keyword.';
+
+      return res.status(503).json({ error: message });
     }
 
     const analysis = await analyzeJobFit(resume, jobs);

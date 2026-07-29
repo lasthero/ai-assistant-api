@@ -1,5 +1,5 @@
-variable "project_name"   {}
-variable "adzuna_app_id"  { sensitive = true }
+variable "project_name" {}
+variable "adzuna_app_id" { sensitive = true }
 variable "adzuna_app_key" { sensitive = true }
 
 resource "aws_secretsmanager_secret" "adzuna" {
@@ -8,7 +8,7 @@ resource "aws_secretsmanager_secret" "adzuna" {
 }
 
 resource "aws_secretsmanager_secret_version" "adzuna" {
-  secret_id     = aws_secretsmanager_secret.adzuna.id
+  secret_id = aws_secretsmanager_secret.adzuna.id
   secret_string = jsonencode({
     app_id  = var.adzuna_app_id
     app_key = var.adzuna_app_key

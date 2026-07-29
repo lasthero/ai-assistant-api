@@ -55,7 +55,6 @@ module "ecs" {
   project_name       = var.project_name
   aws_region         = var.aws_region
   vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
   public_subnet_ids  = module.vpc.public_subnet_ids
   ecr_repository_url = module.ecr.repository_url
   execution_role_arn = module.iam.ecs_execution_role_arn
@@ -70,17 +69,6 @@ module "api_gateway" {
   project_name = var.project_name
   alb_dns_name = module.ecs.alb_dns_name
   env          = var.env
-}
-
-module "lambda" {
-  source             = "../../modules/lambda"
-  project_name       = var.project_name
-  aws_region         = var.aws_region
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-  redis_host         = module.elasticache.redis_host
-  adzuna_secret_arn  = module.secrets.adzuna_secret_arn
-  lambda_role_arn    = module.iam.lambda_role_arn
 }
 
 data "aws_caller_identity" "current" {}

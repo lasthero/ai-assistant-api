@@ -1,5 +1,5 @@
-variable "project_name"       {}
-variable "vpc_id"             {}
+variable "project_name" {}
+variable "vpc_id" {}
 variable "private_subnet_ids" {}
 
 resource "aws_security_group" "redis" {

@@ -1,14 +1,13 @@
-variable "project_name"        {}
-variable "aws_region"          {}
-variable "vpc_id"              {}
-variable "private_subnet_ids"  {}
-variable "public_subnet_ids"   {}
-variable "ecr_repository_url"  {}
-variable "execution_role_arn"  {}
-variable "task_role_arn"       {}
-variable "redis_host"          {}
-variable "s3_bucket"           {}
-variable "adzuna_secret_arn"   {}
+variable "project_name" {}
+variable "aws_region" {}
+variable "vpc_id" {}
+variable "public_subnet_ids" {}
+variable "ecr_repository_url" {}
+variable "execution_role_arn" {}
+variable "task_role_arn" {}
+variable "redis_host" {}
+variable "s3_bucket" {}
+variable "adzuna_secret_arn" {}
 
 # Security group for ALB
 resource "aws_security_group" "alb" {
@@ -115,14 +114,14 @@ resource "aws_ecs_task_definition" "ai-assistant" {
   task_role_arn            = var.task_role_arn
 
   container_definitions = jsonencode([{
-    name  = "ai-assistant-server"
-    image = "${var.ecr_repository_url}:latest"
+    name         = "ai-assistant-server"
+    image        = "${var.ecr_repository_url}:latest"
     portMappings = [{ containerPort = 3000 }]
     environment = [
-      { name = "PORT",              value = "3000" },
-      { name = "REDIS_HOST",        value = var.redis_host },
-      { name = "S3_BUCKET",         value = var.s3_bucket },
-      { name = "AWS_REGION",        value = var.aws_region },
+      { name = "PORT", value = "3000" },
+      { name = "REDIS_HOST", value = var.redis_host },
+      { name = "S3_BUCKET", value = var.s3_bucket },
+      { name = "AWS_REGION", value = var.aws_region },
       # plain env var holding the ARN string — the app calls GetSecretValue
       # itself at runtime via the task role, so this is NOT an ECS "secrets"
       # injection (which would inject the secret's actual value instead)
@@ -151,9 +150,12 @@ resource "aws_ecs_service" "ai-assistant" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = var.private_subnet_ids
+    # public subnet + public IP — Fargate tasks (unlike Lambda) can do this,
+    # so the task reaches Bedrock/Adzuna directly over the IGW instead of
+    # needing a NAT Gateway. Inbound is still locked to the ALB via the SG.
+    subnets          = var.public_subnet_ids
     security_groups  = [aws_security_group.ecs.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {

@@ -1,7 +1,7 @@
 variable "project_name" {}
-variable "s3_bucket"    {}
-variable "aws_region"   {}
-variable "account_id"   {}
+variable "s3_bucket" {}
+variable "aws_region" {}
+variable "account_id" {}
 
 # ECS execution role — pulls images, writes logs
 resource "aws_iam_role" "ecs_execution" {
@@ -23,9 +23,9 @@ resource "aws_iam_role_policy" "ecs_execution_secrets" {
     Version = "2012-10-17"
     Statement = [
       {
-        Sid    = "SecretsManagerRead"
-        Effect = "Allow"
-        Action = "secretsmanager:GetSecretValue"
+        Sid      = "SecretsManagerRead"
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
         Resource = "arn:aws:secretsmanager:us-east-1:${var.account_id}:secret:${var.project_name}/*"
       }
     ]
@@ -80,47 +80,14 @@ resource "aws_iam_role_policy" "ecs_task" {
         ]
       },
       {
-        Sid    = "SecretsRead"
-        Effect = "Allow"
-        Action = "secretsmanager:GetSecretValue"
+        Sid      = "SecretsRead"
+        Effect   = "Allow"
+        Action   = "secretsmanager:GetSecretValue"
         Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:${var.project_name}/*"
       }
     ]
   })
 }
 
-# Lambda role — Redis + Secrets
-resource "aws_iam_role" "lambda" {
-  name = "${var.project_name}-lambda"
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Effect    = "Allow"
-      Principal = { Service = "lambda.amazonaws.com" }
-      Action    = "sts:AssumeRole"
-    }]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "lambda_vpc" {
-  role       = aws_iam_role.lambda.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole"
-}
-
-resource "aws_iam_role_policy" "lambda" {
-  name = "${var.project_name}-lambda-policy"
-  role = aws_iam_role.lambda.id
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [{
-      Sid    = "SecretsRead"
-      Effect = "Allow"
-      Action = "secretsmanager:GetSecretValue"
-      Resource = "arn:aws:secretsmanager:${var.aws_region}:${var.account_id}:secret:${var.project_name}/*"
-    }]
-  })
-}
-
 output "ecs_execution_role_arn" { value = aws_iam_role.ecs_execution.arn }
-output "ecs_task_role_arn"      { value = aws_iam_role.ecs_task.arn }
-output "lambda_role_arn"        { value = aws_iam_role.lambda.arn }
+output "ecs_task_role_arn" { value = aws_iam_role.ecs_task.arn }

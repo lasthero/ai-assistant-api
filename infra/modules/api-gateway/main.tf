@@ -1,6 +1,6 @@
 variable "project_name" {}
 variable "alb_dns_name" {}
-variable "env"          {}
+variable "env" {}
 
 resource "aws_api_gateway_rest_api" "ai-assistant" {
   name        = "${var.project_name}-api"
@@ -177,5 +177,5 @@ resource "aws_api_gateway_usage_plan_key" "main" {
   usage_plan_id = aws_api_gateway_usage_plan.main.id
 }
 
-output "api_url"    { value = aws_api_gateway_stage.prod.invoke_url }
+output "api_url" { value = aws_api_gateway_stage.prod.invoke_url }
 output "api_key_id" { value = aws_api_gateway_api_key.site.id }
