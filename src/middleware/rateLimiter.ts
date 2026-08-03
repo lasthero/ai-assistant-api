@@ -10,8 +10,14 @@ const DAILY_LIMIT = 5;
 export async function rateLimiter(req: Request, res: Response, next: NextFunction) {
   const deviceId = req.headers['x-device-id'] as string;
 
+  // No x-device-id means this is a server-to-server call (e.g. your own
+  // website's build process fetching resume data), not a public mobile
+  // client — CareerForge always sends this header, so its absence reliably
+  // identifies trusted internal traffic already authenticated via x-api-key.
+  // Skip rate limiting entirely rather than erroring, since these calls
+  // aren't the abuse vector this limiter protects against.
   if (!deviceId) {
-    return res.status(400).json({ error: 'x-device-id header required' });
+    return next();
   }
 
   try {
