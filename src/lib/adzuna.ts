@@ -18,6 +18,16 @@ export async function getAdzunaCredentials() {
   return cachedCreds!;
 }
 
+// Adzuna returns salary_min === salary_max for predicted/estimated salaries
+// (no actual posted range, just one estimate) — showing that as "$57K - $57K"
+// reads as a broken range, so collapse it to a single figure instead.
+function formatSalaryDisplay(min?: number, max?: number): string | null {
+  if (min == null) return null;
+  const roundedMin = Math.round(min / 1000);
+  const roundedMax = max != null ? Math.round(max / 1000) : roundedMin;
+  return roundedMin === roundedMax ? `$${roundedMin}K` : `$${roundedMin}K - $${roundedMax}K`;
+}
+
 export async function fetchAdzunaJobs(
   query: string,
   location: string = '', // empty = nationwide US
@@ -71,9 +81,7 @@ export async function fetchAdzunaJobs(
       min:     job.salary_min ?? null,
       max:     job.salary_max ?? null,
       period:  'YEAR',
-      display: job.salary_min
-        ? `$${Math.round(job.salary_min / 1000)}K - $${Math.round(job.salary_max / 1000)}K`
-        : null,
+      display: formatSalaryDisplay(job.salary_min, job.salary_max),
     },
   }));
 }
