@@ -38,10 +38,20 @@ export async function fetchAdzunaJobs(
 
   const url = `https://api.adzuna.com/v1/api/jobs/us/search/1?${params}`;
   const res = await fetch(url);
-  const data = await res.json() as {
-    results?: any[];
-    count?: number;
-  };
+  const body = await res.text();
+
+  // Adzuna returns an HTML page (not JSON) on rate limits (429), outages (5xx)
+  // and bad credentials/URLs. Throw a readable error instead of a JSON SyntaxError.
+  let data: { results?: any[]; count?: number };
+  try {
+    data = JSON.parse(body);
+  } catch {
+    throw new Error(
+      `Adzuna returned non-JSON (HTTP ${res.status}, ${res.headers.get('content-type')}): ` +
+      body.slice(0, 150).replace(/\s+/g, ' ')
+    );
+  }
+  if (!res.ok) throw new Error(`Adzuna HTTP ${res.status}: ${body.slice(0, 150)}`);
 
   if (!data.results || !Array.isArray(data.results)) {
     console.log('[adzuna] unexpected response:', JSON.stringify(data).slice(0, 300));

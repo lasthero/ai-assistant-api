@@ -33,12 +33,17 @@ export async function runJobScraper(): Promise<void> {
   for (const query of queries) {
     try {
       const jobs = await fetchAdzunaJobs(query);
-      const key = `jobs:${query.replace(/\s+/g, '_').toLowerCase()}`;
-      await redis.setEx(key, CACHE_TTL_SECONDS, JSON.stringify(jobs));
-      console.log(`[scraper] cached ${jobs.length} jobs for "${query}"`);
-    } catch (err) {
-      console.error(`[scraper] failed to fetch/cache "${query}":`, err);
+      if (jobs.length === 0) {
+        console.log(`[scraper] no jobs for "${query}" — keeping existing cache`);
+      } else {
+        const key = `jobs:${query.replace(/\s+/g, '_').toLowerCase()}`;
+        await redis.setEx(key, CACHE_TTL_SECONDS, JSON.stringify(jobs));
+        console.log(`[scraper] cached ${jobs.length} jobs for "${query}"`);
+      }
+    } catch (err: any) {
+      console.error(`[scraper] failed to fetch/cache "${query}":`, err?.message ?? err);
     }
+    await new Promise(r => setTimeout(r, 1500)); // stay under Adzuna's per-minute limit
   }
 
   console.log('[scraper] job scraper completed');
