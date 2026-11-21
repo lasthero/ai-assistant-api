@@ -18,7 +18,3 @@ output "alb_dns_name" {
   value       = module.ecs.alb_dns_name
 }
 
-output "redis_host" {
-  description = "ElastiCache Redis host"
-  value       = module.elasticache.redis_host
-}

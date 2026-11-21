@@ -1,7 +1,7 @@
 // ai-assistant-api/src/handlers/analyze.ts
 import { Request, Response } from 'express';
 import { fetchResumeText } from '../lib/resume';
-import { getAllCachedJobs, getRedisClient, recordQueryPopularity } from '../lib/cache';
+import { getAllCachedJobs, store, recordQueryPopularity } from '../lib/cache';
 import { fetchAdzunaJobs } from '../lib/adzuna';
 import { analyzeJobFit } from '../lib/bedrock';
 
@@ -43,14 +43,13 @@ export async function analyzeHandler(req: Request, res: Response) {
       // scoped cache entry leaking in there would bias "no location"
       // searches toward whatever location was last searched by anyone.
       const liveKey = `search:${jobQuery.replace(/\s+/g, '_').toLowerCase()}:${location.replace(/\s+/g, '_').toLowerCase()}`;
-      const redis = await getRedisClient();
-      const cachedLive = await redis.get(liveKey);
+      const cachedLive = await store.get(liveKey);
 
       if (cachedLive) {
         jobs = JSON.parse(cachedLive);
       } else {
         jobs = await fetchAdzunaJobs(jobQuery, location);
-        await redis.setEx(liveKey, LIVE_SEARCH_CACHE_TTL, JSON.stringify(jobs));
+        await store.setEx(liveKey, LIVE_SEARCH_CACHE_TTL, JSON.stringify(jobs));
       }
 
     } else {
@@ -70,15 +69,14 @@ export async function analyzeHandler(req: Request, res: Response) {
         // same reasoning as the location-scoped key above — must stay out
         // of the "jobs:*" namespace that getAllCachedJobs() scans.
         const liveKey = `search:${jobQuery.replace(/\s+/g, '_').toLowerCase()}`;
-        const redis = await getRedisClient();
-        const cachedLive = await redis.get(liveKey);
+        const cachedLive = await store.get(liveKey);
 
         let liveJobs;
         if (cachedLive) {
           liveJobs = JSON.parse(cachedLive);
         } else {
           liveJobs = await fetchAdzunaJobs(jobQuery);
-          await redis.setEx(liveKey, LIVE_SEARCH_CACHE_TTL, JSON.stringify(liveJobs));
+          await store.setEx(liveKey, LIVE_SEARCH_CACHE_TTL, JSON.stringify(liveJobs));
         }
 
         const seen = new Set(jobs.map(j => j.id));

@@ -43,13 +43,6 @@ module "secrets" {
   adzuna_app_key = var.adzuna_app_key
 }
 
-module "elasticache" {
-  source             = "../../modules/elasticache"
-  project_name       = var.project_name
-  vpc_id             = module.vpc.vpc_id
-  private_subnet_ids = module.vpc.private_subnet_ids
-}
-
 module "ecs" {
   source             = "../../modules/ecs"
   project_name       = var.project_name
@@ -59,7 +52,6 @@ module "ecs" {
   ecr_repository_url = module.ecr.repository_url
   execution_role_arn = module.iam.ecs_execution_role_arn
   task_role_arn      = module.iam.ecs_task_role_arn
-  redis_host         = module.elasticache.redis_host
   s3_bucket          = var.s3_bucket_name
   adzuna_secret_arn  = module.secrets.adzuna_secret_arn
 }

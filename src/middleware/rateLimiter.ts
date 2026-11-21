@@ -3,7 +3,7 @@
 // (resume parsing, job matching, interview prep, career advice) — 3 per
 // device per day, not 3 per individual feature.
 import { Request, Response, NextFunction } from 'express';
-import { getRedisClient } from '../lib/cache';
+import { store } from '../lib/cache';
 
 const DAILY_LIMIT = 5;
 
@@ -21,15 +21,14 @@ export async function rateLimiter(req: Request, res: Response, next: NextFunctio
   }
 
   try {
-    const redis = await getRedisClient();
     const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
     const key = `ratelimit:${deviceId}:${today}`;
 
-    const count = await redis.incr(key);
+    const count = await store.incr(key);
 
     // set expiry on first request of the day
     if (count === 1) {
-      await redis.expire(key, 86400); // 24 hours
+      await store.expire(key, 86400); // 24 hours
     }
 
     const remaining = Math.max(0, DAILY_LIMIT - count);
@@ -52,7 +51,7 @@ export async function rateLimiter(req: Request, res: Response, next: NextFunctio
 
     next();
   } catch (err) {
-    // if Redis fails, allow through
+    // if the store throws unexpectedly, allow through
     console.error('Rate limiter error:', err);
     next();
   }

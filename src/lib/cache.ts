@@ -1,20 +1,59 @@
-import { createClient } from 'redis';
+// In-process cache + rate-limit store — replaces the ElastiCache Redis
+// instance that used to back this. The ECS service runs a single task
+// (desired_count = 1, no horizontal scaling), so nothing here needs to be
+// shared across instances; state just resets on deploy/restart, which is
+// fine for a self-rewarming job cache and daily rate-limit counters.
 
-let client: ReturnType<typeof createClient> | null = null;
+type Entry = { value: string; expiresAt: number | null };
 
-export async function getRedisClient() {
-  if (!client) {
-    client = createClient({
-      socket: {
-        host: process.env.REDIS_HOST!,
-        port: 6379,
-      },
-    });
-    client.on('error', (err) => console.error('Redis error:', err));
-    await client.connect();
-  }
-  return client;
+const kv = new Map<string, Entry>();
+const zsets = new Map<string, Map<string, number>>();
+
+function isLive(e: Entry | undefined): e is Entry {
+  return !!e && (e.expiresAt === null || e.expiresAt > Date.now());
 }
+
+export const store = {
+  async get(key: string): Promise<string | null> {
+    const e = kv.get(key);
+    return isLive(e) ? e.value : null;
+  },
+
+  async setEx(key: string, ttlSeconds: number, value: string): Promise<void> {
+    kv.set(key, { value, expiresAt: Date.now() + ttlSeconds * 1000 });
+  },
+
+  async keys(prefixPattern: string): Promise<string[]> {
+    const prefix = prefixPattern.replace(/\*$/, '');
+    return [...kv.keys()].filter(k => k.startsWith(prefix) && isLive(kv.get(k)));
+  },
+
+  async incr(key: string): Promise<number> {
+    const e = kv.get(key);
+    const next = (isLive(e) ? Number(e.value) : 0) + 1;
+    kv.set(key, { value: String(next), expiresAt: isLive(e) ? e.expiresAt : null });
+    return next;
+  },
+
+  async expire(key: string, ttlSeconds: number): Promise<void> {
+    const e = kv.get(key);
+    if (e) e.expiresAt = Date.now() + ttlSeconds * 1000;
+  },
+
+  async zIncrBy(key: string, increment: number, member: string): Promise<void> {
+    const z = zsets.get(key) ?? new Map<string, number>();
+    z.set(member, (z.get(member) ?? 0) + increment);
+    zsets.set(key, z);
+  },
+
+  async zRange(key: string, start: number, stop: number, opts?: { REV?: boolean }): Promise<string[]> {
+    const z = zsets.get(key);
+    if (!z) return [];
+    const sorted = [...z.entries()].sort((a, b) => opts?.REV ? b[1] - a[1] : a[1] - b[1]);
+    const end = stop === -1 ? sorted.length : stop + 1;
+    return sorted.slice(start, end).map(([member]) => member);
+  },
+};
 
 export type Job = {
   id:          string;
@@ -33,18 +72,16 @@ export type Job = {
 };
 
 export async function getJobsFromCache(query: string): Promise<Job[]> {
-  const redis = await getRedisClient();
   const key = `jobs:${query.replace(/\s+/g, '_').toLowerCase()}`;
-  const cached = await redis.get(key);
+  const cached = await store.get(key);
   return cached ? JSON.parse(cached) : [];
 }
 
 export async function getAllCachedJobs(): Promise<Job[]> {
-  const redis = await getRedisClient();
-  const keys = await redis.keys('jobs:*');
+  const keys = await store.keys('jobs:*');
   if (!keys.length) return [];
 
-  const results = await Promise.all(keys.map(k => redis.get(k)));
+  const results = await Promise.all(keys.map(k => store.get(k)));
   return results
     .filter(Boolean)
     .flatMap(r => JSON.parse(r!) as Job[]);
@@ -58,15 +95,11 @@ export async function getAllCachedJobs(): Promise<Job[]> {
 const POPULARITY_KEY = 'query_popularity';
 
 export async function recordQueryPopularity(query: string): Promise<void> {
-  const redis = await getRedisClient();
   const normalized = query.trim().toLowerCase();
   if (!normalized) return;
-  // ZINCRBY — sorted set, score = number of times this query has been searched
-  await redis.zIncrBy(POPULARITY_KEY, 1, normalized);
+  await store.zIncrBy(POPULARITY_KEY, 1, normalized);
 }
 
 export async function getTopQueries(limit: number = 20): Promise<string[]> {
-  const redis = await getRedisClient();
-  // highest score first
-  return redis.zRange(POPULARITY_KEY, 0, limit - 1, { REV: true });
+  return store.zRange(POPULARITY_KEY, 0, limit - 1, { REV: true });
 }

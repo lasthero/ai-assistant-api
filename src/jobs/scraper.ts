@@ -2,7 +2,7 @@
 // Previously a separate Lambda; moved here so the app no longer needs a
 // NAT Gateway just to give a VPC-bound Lambda internet access to Adzuna.
 import { fetchAdzunaJobs } from '../lib/adzuna';
-import { getRedisClient, getTopQueries } from '../lib/cache';
+import { store, getTopQueries } from '../lib/cache';
 
 // only used when query_popularity has no data yet (e.g. right after a fresh deploy)
 const SEED_QUERIES = [
@@ -28,8 +28,6 @@ export async function runJobScraper(): Promise<void> {
   console.log(`[scraper] warming cache for ${queries.length} queries ` +
     (topQueries.length ? '(from query_popularity)' : '(seed list — no usage data yet)'));
 
-  const redis = await getRedisClient();
-
   for (const query of queries) {
     try {
       const jobs = await fetchAdzunaJobs(query);
@@ -37,7 +35,7 @@ export async function runJobScraper(): Promise<void> {
         console.log(`[scraper] no jobs for "${query}" — keeping existing cache`);
       } else {
         const key = `jobs:${query.replace(/\s+/g, '_').toLowerCase()}`;
-        await redis.setEx(key, CACHE_TTL_SECONDS, JSON.stringify(jobs));
+        await store.setEx(key, CACHE_TTL_SECONDS, JSON.stringify(jobs));
         console.log(`[scraper] cached ${jobs.length} jobs for "${query}"`);
       }
     } catch (err: any) {

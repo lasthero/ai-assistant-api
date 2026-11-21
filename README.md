@@ -101,5 +101,5 @@ AI_API_KEY=xxx  # get from: aws apigateway get-api-key --api-key <id> --include-
 ```bash
 cd src
 npm install
-REDIS_HOST=localhost S3_BUCKET=chihho-dev-assets AWS_REGION=us-east-1 npm run dev
+S3_BUCKET=chihho-dev-assets AWS_REGION=us-east-1 npm run dev
 ```

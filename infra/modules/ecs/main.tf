@@ -5,7 +5,6 @@ variable "public_subnet_ids" {}
 variable "ecr_repository_url" {}
 variable "execution_role_arn" {}
 variable "task_role_arn" {}
-variable "redis_host" {}
 variable "s3_bucket" {}
 variable "adzuna_secret_arn" {}
 
@@ -108,7 +107,7 @@ resource "aws_ecs_task_definition" "ai-assistant" {
   family                   = "${var.project_name}-server"
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
-  cpu                      = "512"
+  cpu                      = "256"
   memory                   = "1024"
   execution_role_arn       = var.execution_role_arn
   task_role_arn            = var.task_role_arn
@@ -119,7 +118,6 @@ resource "aws_ecs_task_definition" "ai-assistant" {
     portMappings = [{ containerPort = 3000 }]
     environment = [
       { name = "PORT", value = "3000" },
-      { name = "REDIS_HOST", value = var.redis_host },
       { name = "S3_BUCKET", value = var.s3_bucket },
       { name = "AWS_REGION", value = var.aws_region },
       # plain env var holding the ARN string — the app calls GetSecretValue
